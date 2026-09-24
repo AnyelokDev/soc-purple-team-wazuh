@@ -1,0 +1,4 @@
+report/**     linguist-documentation
+docs/**       linguist-documentation
+evidencia/**  linguist-documentation
+*.xml         linguist-detectable=true
