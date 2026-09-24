@@ -1,14 +1,19 @@
 ================================================================
   GUION DEMO PURPLE TEAM  ·  Wazuh x Fable 5.1
   Dashboard: http://TU_IP_EC2:8080
-  Los ataques se corren en la EC2 (o Kali). La regla se aplica en la EC2.
+  Los ataques de red se lanzan desde Kali contra la IP publica
+  de la EC2 (opcion A). Sin Kali, se pueden reproducir desde la
+  propia EC2 contra 127.0.0.1 (opcion B). La regla se aplica en
+  la EC2.
 ================================================================
 
 ------------------------------------------------
 PASO 0 - ANTES DE EMPEZAR (deja esto abierto)
 ------------------------------------------------
 - Navegador con el dashboard: http://TU_IP_EC2:8080
-- Una terminal en la EC2 (donde corre Wazuh)
+- Una terminal en Kali (atacante)
+- Una terminal en la EC2 (donde corre Wazuh), entrando por SSH
+  con la clave
 - Comprueba que el panel dice "en vivo" arriba a la derecha.
 
 DECIR: "Esto es Wazuh real. Cada alerta que veran sale de
@@ -19,73 +24,118 @@ PASO 1 - PONER EL TABLERO EN CERO
 ------------------------------------------------
 - En el dashboard pulsa el boton "Reiniciar demo".
 - Las 7 casillas MITRE se ponen ROJAS. Cobertura 0%.
+  (Rojo significa "sin alerta todavia", no "sin regla".)
 
 DECIR: "Empezamos sin cobertura. Cada ataque que lance el
 equipo ofensivo deberia encender una tecnica."
 
 ------------------------------------------------
-PASO 2 - ATAQUES QUE SI DETECTA (6 en verde)
+PASO 2 - ACCESO Y ESCALADA (reglas de fabrica)
 ------------------------------------------------
-Pega en la terminal, uno por uno:
+En la terminal de la EC2 (ya entraste por SSH con la clave):
 
-  # Recon / escaneo  -> T1595 + T1046
-  python3 -c "import socket;[socket.create_connection(('127.0.0.1',22),2).recv(64) for _ in range(3)]"
-
-  # Fuerza bruta SSH  -> T1110 + T1021
-  for i in $(seq 1 8); do ssh -o BatchMode=yes -o ConnectTimeout=2 admin@127.0.0.1 true 2>/dev/null; done
-
-  # Login valido  -> T1078
-  ssh ec2-user@127.0.0.1 true
-
+  # Login valido  -> T1078 + T1021 (lo genera tu propio acceso SSH)
   # Escalada de privilegios  -> T1548
   sudo -k; sudo id
 
+  Opcion B (desde la EC2):
+  ssh ec2-user@127.0.0.1 true
+  sudo -k; sudo id
+
 MOSTRAR: el flujo de 4 nodos iluminandose, el log en vivo,
-y 6 casillas pasando a VERDE. Cobertura sube.
+y T1078, T1021 y T1548 en VERDE. Cobertura 43%.
 
-DECIR: "Fable correlaciona cada alerta con ATT&CK en tiempo
-real. Seis tecnicas cubiertas."
+DECIR: "Estas las cubre Wazuh de fabrica. El panel muestra el
+mapeo ATT&CK de cada alerta, en tiempo real."
 
 ------------------------------------------------
-PASO 3 - ENSENAR EL HUECO (T1136 sigue en rojo)
+PASO 3 - EL HUECO REAL: EL ESCANEO (desde Kali)
 ------------------------------------------------
-Pega:
+Opcion A - en Kali:
+
+  # Recon / escaneo  -> T1595 + T1046
+  sudo nmap -sS -sV -A TU_IP_EC2
+
+Opcion B - en la EC2:
+
+  python3 -c "import socket;[socket.create_connection(('127.0.0.1',22),2).recv(64) for _ in range(3)]"
+
+MOSTRAR: la alerta de la regla 100100 (nivel 8) en el log, y
+T1595 y T1046 pasando a VERDE. Cobertura 71%.
+
+DECIR: "Este era el hueco real. El nmap llegaba al servidor,
+pero el Wazuh de fabrica no tenia ninguna regla que lo
+interpretara: el escaneo era invisible. Dentro del flujo que
+disene, Fable escribio de forma autonoma un decoder y las
+reglas 100098 a 100100, y las fue ajustando contra los eventos
+reales del servidor hasta que el escaneo quedo detectado.
+Eso es deteccion como codigo."
+
+------------------------------------------------
+PASO 4 - FUERZA BRUTA (desde Kali)
+------------------------------------------------
+Opcion A - en Kali:
+
+  # Intentos con usuarios inexistentes  -> T1110 + T1021
+  for i in $(seq 1 15); do ssh -o BatchMode=yes -o ConnectTimeout=3 baduser$i@TU_IP_EC2 true 2>/dev/null; done
+
+Opcion B - en la EC2:
+
+  for i in $(seq 1 8); do ssh -o BatchMode=yes -o ConnectTimeout=2 admin@127.0.0.1 true 2>/dev/null; done
+
+MOSTRAR: reglas 5710 y 5712 (brute force) en el log, T1110 en
+VERDE. Cobertura 86%.
+
+DECIR: "Hydra por contrasena ni siquiera funciona: el SSH solo
+acepta clave. Por eso atacamos con usuarios inexistentes, y
+Wazuh lo correlaciona como fuerza bruta."
+
+------------------------------------------------
+PASO 5 - CREACION DE CUENTA (T1136, ya detectada)
+------------------------------------------------
+En la EC2:
 
   sudo useradd demo_attacker
 
 MOSTRAR: en el log aparece "New user added to the system"
-(nivel 8), PERO la casilla T1136 sigue ROJA.
+(regla 5902, nivel 8) con la etiqueta T1136. La casilla T1136
+pasa a VERDE. Cobertura 100%.
 
-DECIR: "Aqui esta el hueco. Wazuh VE que se creo una cuenta,
-pero no lo mapea a ATT&CK. Un analista no lo veria como
-persistencia. Esto es una brecha de cobertura real."
+DECIR: "Aqui supusimos al principio que habia otro hueco, pero
+la evidencia dijo lo contrario: la regla de fabrica 5902 ya
+detecta la creacion de cuentas y la mapea a T1136. La casilla
+estaba en rojo solo porque aun no se habia creado ninguna."
 
 ------------------------------------------------
-PASO 4 - FABLE CIERRA EL HUECO (en vivo)
+PASO 6 - ENRIQUECER LA REGLA (en vivo)
 ------------------------------------------------
-Pega en la terminal de la EC2:
+En la terminal de la EC2:
 
   /home/ec2-user/demo/close_gap_t1136.sh
 
 (espera ~10 seg a que Wazuh reinicie)
 
-DECIR: "Fable propone y aplica una regla que mapea la
-creacion de cuentas a la tecnica T1136. Lo aplicamos en vivo."
+DECIR: "Fable escribio la regla 100200. Yo la aplico con este
+script. No cambia la deteccion: sube el nivel de 8 a 10, dentro
+del umbral de respuesta activa, y la describe como persistencia."
 
 ------------------------------------------------
-PASO 5 - REPETIR ATAQUE -> CASILLA EN VERDE
+PASO 7 - REPETIR -> ALERTA DE NIVEL 10
 ------------------------------------------------
 Pega:
 
   sudo userdel demo_attacker; sudo useradd demo_attacker2
 
-MOSTRAR: la casilla T1136 pasa a VERDE. Cobertura 100%.
+MOSTRAR: la alerta de la regla 100200, nivel 10, con la
+descripcion "Persistencia: cuenta local creada" y T1136.
 
-DECIR: "Mismo ataque, ahora detectado y mapeado. El hueco
-quedo cerrado. Detectar y corregir, en minutos, no semanas."
+DECIR: "Misma accion, ahora con prioridad de incidente. El
+hueco real, el escaneo, lo cerro una regla escrita por Fable;
+esta segunda regla mejora una deteccion que ya existia.
+Detectar y corregir, en minutos, no semanas."
 
 ------------------------------------------------
-PASO 6 - LIMPIEZA (despues de la demo)
+PASO 8 - LIMPIEZA (despues de la demo)
 ------------------------------------------------
   sudo userdel demo_attacker2
 
