@@ -11,6 +11,11 @@ La idea central: se atacan varias técnicas. Wazuh detecta unas (verde) y otras 
 "New user added" pero no lo mapea a ATT&CK. Se aplica una regla custom que lo mapea,
 se re-ataca y la casilla pasa a verde. Eso es **detección como código**.
 
+![Panel en vivo: cobertura 71 %, T1136 marcado como hueco](evidencia/08_panel_71_flujo_completo.png)
+
+<sup>Panel durante la demo: flujo ataque → detección → análisis → regla, cuadrícula MITRE
+ATT&CK y log de alertas reales. Cobertura 71 % — T1136 (Create Account) sigue en rojo.</sup>
+
 > 📄 **Informe completo con evidencias:**
 > [`docs/Informe-SOC-Purple-Team-Wazuh.pdf`](docs/Informe-SOC-Purple-Team-Wazuh.pdf)
 > · las 22 capturas de la demo están en [`evidencia/`](evidencia/).
@@ -132,6 +137,11 @@ sudo useradd demo_attacker
 # 3. Mismo ataque, ahora detectado y mapeado -> casilla verde, cobertura 100%
 sudo userdel demo_attacker; sudo useradd demo_attacker2
 ```
+
+![Panel tras cerrar el hueco: cobertura 100 %, T1136 cerrado](evidencia/22_panel_100_regla_100200_t1136.png)
+
+<sup>Mismo ataque tras aplicar la regla 100200: T1136 pasa a cerrado, la cobertura llega
+al 100 % y la alerta entra en el log con nivel 10 y su etiqueta MITRE.</sup>
 
 ### Limpieza tras la demo
 
