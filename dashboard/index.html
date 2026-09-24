@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purple Team Live · Wazuh × Fable 5.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d14; --surface:#12151f; --surface-2:#191d2a; --border:#252a3a;
+    --ink:#eef0f6; --ink-2:#a7adc0; --ink-3:#6b7186;
+    --fable:#a78bfa;  /* morado = Fable */
+    --detect:#22d3ee; /* cian   = detección */
+    --gap:#f87171;    /* rojo   = ataque / hueco */
+    --closed:#4ade80; /* verde  = cerrado */
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Poppins,system-ui,sans-serif;font-size:14px;line-height:1.4}
+  body{min-height:100vh;padding:22px 26px 30px;background:
+    radial-gradient(1200px 500px at 15% -10%, rgba(167,139,250,.10), transparent 60%),
+    radial-gradient(900px 400px at 95% 0%, rgba(34,211,238,.07), transparent 60%), var(--bg)}
+  a{color:inherit}
+
+  /* Header */
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--fable),#6d4fd8);display:grid;place-items:center;font-weight:700;color:#0b0d14;box-shadow:0 0 24px rgba(167,139,250,.45)}
+  .brand h1{margin:0;font-size:19px;font-weight:600;letter-spacing:.2px}
+  .brand p{margin:2px 0 0;color:var(--ink-2);font-size:12.5px}
+  .meta{display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-2)}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+  .dot.on{background:var(--detect);box-shadow:0 0 10px var(--detect)}
+  .dot.off{background:var(--gap);box-shadow:0 0 10px var(--gap)}
+  button{font:inherit;color:var(--ink);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:12.5px}
+  button:hover{border-color:var(--fable)}
+  #clock{font-variant-numeric:tabular-nums}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+  .card h2{margin:0 0 12px;font-size:12px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-2)}
+  .card h2 small{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-3);margin-left:8px}
+
+  /* Flow */
+  .flow{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr 34px 1fr;align-items:stretch;gap:0}
+  .node{position:relative;border:1px solid var(--border);border-radius:var(--r);padding:14px 14px 12px;background:var(--surface-2);transition:box-shadow .25s,border-color .25s,transform .25s;min-height:118px}
+  .node .k{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+  .node .k i{width:9px;height:9px;border-radius:50%;background:var(--c);opacity:.55;transition:opacity .2s,box-shadow .2s}
+  .node .t{font-size:15.5px;font-weight:600;margin:5px 0 3px}
+  .node .s{font-size:12px;color:var(--ink-2);min-height:34px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .node.lit{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset,0 0 28px color-mix(in srgb,var(--c) 45%,transparent);transform:translateY(-2px)}
+  .node.lit .k i{opacity:1;box-shadow:0 0 12px var(--c)}
+  .node.lit .t{color:var(--c)}
+  .node.n1{--c:var(--gap)} .node.n2{--c:var(--detect)} .node.n3{--c:var(--fable)} .node.n4{--c:var(--closed)}
+  .arrow{display:grid;place-items:center;color:var(--ink-3);position:relative}
+  .arrow::before{content:"";position:absolute;left:4px;right:4px;top:50%;height:2px;background:var(--border);border-radius:2px}
+  .arrow.lit::before{background:linear-gradient(90deg,var(--a),var(--b));box-shadow:0 0 10px var(--b)}
+  .arrow svg{position:relative;z-index:1;background:var(--surface);border-radius:50%}
+  .arrow.lit svg{color:var(--b)}
+  .a1{--a:var(--gap);--b:var(--detect)} .a2{--a:var(--detect);--b:var(--fable)} .a3{--a:var(--fable);--b:var(--closed)}
+  .node .badge{position:absolute;top:10px;right:10px;font-size:10.5px;padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+  /* Middle row */
+  .row{display:grid;grid-template-columns:340px 1fr;gap:16px;margin-top:16px}
+  .hero{display:flex;flex-direction:column}
+  .hero .num{font-size:88px;font-weight:700;line-height:1;letter-spacing:-2px;font-variant-numeric:tabular-nums;margin:8px 0 6px;transition:color .4s}
+  .hero .num sup{font-size:30px;font-weight:500;letter-spacing:0;vertical-align:top;margin-left:2px;color:var(--ink-2)}
+  .hero .sub{color:var(--ink-2);font-size:13px}
+  .bar{height:10px;background:var(--surface-2);border-radius:999px;margin:16px 0 8px;overflow:hidden;border:1px solid var(--border)}
+  .bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--closed),color-mix(in srgb,var(--closed) 70%,var(--detect)));transition:width .7s cubic-bezier(.2,.8,.2,1)}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:auto;padding-top:14px}
+  .kv div{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .kv b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+  .kv span{font-size:11.5px;color:var(--ink-2)}
+  .kv .g b{color:var(--closed)} .kv .r b{color:var(--gap)} .kv .c b{color:var(--detect)} .kv .p b{color:var(--fable)}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tech{border:1px solid var(--border);border-radius:12px;padding:12px 13px;background:var(--surface-2);position:relative;transition:all .35s;min-height:96px}
+  .tech .id{font-weight:600;font-size:15px;letter-spacing:.3px}
+  .tech .nm{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .tech .st{display:inline-flex;align-items:center;gap:6px;margin-top:9px;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid}
+  .tech .cnt{position:absolute;top:10px;right:11px;font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .tech.gap{border-color:color-mix(in srgb,var(--gap) 60%,var(--border));background:color-mix(in srgb,var(--gap) 9%,var(--surface-2))}
+  .tech.gap .st{color:var(--gap);border-color:color-mix(in srgb,var(--gap) 50%,transparent)}
+  .tech.closed{border-color:color-mix(in srgb,var(--closed) 65%,var(--border));background:color-mix(in srgb,var(--closed) 10%,var(--surface-2))}
+  .tech.closed .st{color:var(--closed);border-color:color-mix(in srgb,var(--closed) 50%,transparent)}
+  .tech.extra{border-color:color-mix(in srgb,var(--detect) 55%,var(--border));background:color-mix(in srgb,var(--detect) 8%,var(--surface-2))}
+  .tech.extra .st{color:var(--detect);border-color:color-mix(in srgb,var(--detect) 50%,transparent)}
+  .tech.flash{animation:flash .9s ease-out}
+  @keyframes flash{0%{box-shadow:0 0 0 2px var(--closed),0 0 30px var(--closed)}100%{box-shadow:none}}
+  .extras{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;min-height:30px}
+  .extras .chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--detect) 50%,var(--border));color:var(--detect);font-size:12px;font-weight:500;background:color-mix(in srgb,var(--detect) 8%,var(--surface-2))}
+  .extras .chip small{color:var(--ink-3);font-weight:400}
+  .extras .empty{color:var(--ink-3);font-size:12.5px;padding:6px 0}
+
+  /* Log */
+  .log{margin-top:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--ink-3);font-weight:500;font-size:11px;letter-spacing:.7px;text-transform:uppercase;padding:0 10px 8px;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);vertical-align:top;color:var(--ink-2)}
+  td.ts{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ink-3)}
+  td.desc{color:var(--ink)}
+  tr.new{animation:rowin .6s ease-out}
+  @keyframes rowin{from{background:color-mix(in srgb,var(--detect) 18%,transparent)}to{background:transparent}}
+  .lvl{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border-radius:6px;font-weight:600;font-variant-numeric:tabular-nums;font-size:11.5px;border:1px solid}
+  .lvl.l0{color:var(--ink-2);border-color:var(--border)}
+  .lvl.l1{color:var(--detect);border-color:color-mix(in srgb,var(--detect) 50%,transparent)}
+  .lvl.l2{color:var(--fable);border-color:color-mix(in srgb,var(--fable) 50%,transparent)}
+  .lvl.l3{color:var(--gap);border-color:color-mix(in srgb,var(--gap) 50%,transparent)}
+  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11.5px;font-weight:500;margin:1px 3px 1px 0;border:1px solid var(--border);color:var(--ink-2)}
+  .tag.closed{color:var(--closed);border-color:color-mix(in srgb,var(--closed) 50%,transparent)}
+  .tag.extra{color:var(--detect);border-color:color-mix(in srgb,var(--detect) 45%,transparent)}
+  .logwrap{max-height:340px;overflow:auto}
+  .logwrap::-webkit-scrollbar{width:8px} .logwrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px}
+  .empty-log{color:var(--ink-3);padding:18px 10px;text-align:center}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--ink-2);margin-left:auto}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  @media (max-width:1100px){.row{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}.flow{grid-template-columns:1fr;gap:8px}.arrow{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">F</div>
+    <div>
+      <h1>Purple Team Live <span style="color:var(--ink-3);font-weight:400">·</span> Wazuh × <span style="color:var(--fable)">Fable 5.1</span></h1>
+      <p>Alertas reales de <code style="font-family:inherit;color:var(--ink-2)">/var/ossec/logs/alerts/alerts.json</code> vía SSE · <span id="agent">manager</span></p>
+    </div>
+  </div>
+  <div class="meta">
+    <span class="pill"><span class="dot" id="conn"></span><span id="connTxt">conectando…</span></span>
+    <span class="pill">alertas <b id="total" style="margin-left:4px;font-variant-numeric:tabular-nums">0</b></span>
+    <span class="pill" id="clock">--:--:--</span>
+    <button id="reset" title="Limpia el estado de la demo (no borra nada en Wazuh)">↺ Reiniciar demo</button>
+  </div>
+</header>
+
+<section class="card">
+  <h2>Flujo en vivo <small>ataque → detección → análisis → regla</small></h2>
+  <div class="flow">
+    <div class="node n1" id="n1"><div class="k"><i></i>Etapa 1</div><div class="t">Agente Ofensivo (Kali)</div><div class="s" id="s1">Esperando actividad ofensiva…</div><span class="badge" id="b1">—</span></div>
+    <div class="arrow a1" id="a1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+    <div class="node n2" id="n2"><div class="k"><i></i>Etapa 2</div><div class="t">SOC Wazuh</div><div class="s" id="s2">Sin alertas todavía</div><span class="badge" id="b2">—</span></div>
+    <div class="arrow a2" id="a2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+    <div class="node n3" id="n3"><div class="k"><i></i>Etapa 3</div><div class="t">Fable 5.1</div><div class="s" id="s3">Listo para correlacionar con MITRE ATT&amp;CK</div><span class="badge" id="b3">—</span></div>
+    <div class="arrow a3" id="a3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+    <div class="node n4" id="n4"><div class="k"><i></i>Etapa 4</div><div class="t">Regla</div><div class="s" id="s4">Ninguna técnica cerrada aún</div><span class="badge" id="b4">—</span></div>
+  </div>
+</section>
+
+<div class="row">
+  <section class="card hero">
+    <h2>Cobertura de detección <small>set esperado</small></h2>
+    <div class="num" id="cov" style="color:var(--gap)">0<sup>%</sup></div>
+    <div class="sub"><b id="covN">0</b> de <b id="covT">6</b> técnicas del set con alerta real</div>
+    <div class="bar"><i id="covBar"></i></div>
+    <div class="kv">
+      <div class="g"><b id="kClosed">0</b><span>✔ cerradas</span></div>
+      <div class="r"><b id="kGap">6</b><span>✖ huecos</span></div>
+      <div class="c"><b id="kExtra">0</b><span>◆ otras técnicas</span></div>
+      <div class="p"><b id="kMax">0</b><span>▲ nivel máximo</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="display:flex;align-items:center">Cuadrícula MITRE ATT&amp;CK
+      <span class="legend"><span><i style="background:var(--closed)"></i>cerrado</span><span><i style="background:var(--gap)"></i>hueco</span><span><i style="background:var(--detect)"></i>fuera del set</span></span>
+    </h2>
+    <div class="grid" id="grid"></div>
+    <h2 style="margin-top:16px">Otras técnicas observadas <small>no estaban en el set esperado</small></h2>
+    <div class="extras" id="extras"><span class="empty">Ninguna todavía</span></div>
+  </section>
+</div>
+
+<section class="card log">
+  <h2 style="display:flex;align-items:center">Log en vivo <small>últimas alertas reales · más reciente arriba</small>
+    <span class="legend"><span><i style="background:var(--detect)"></i>nivel 5–9</span><span><i style="background:var(--fable)"></i>nivel 10–11</span><span><i style="background:var(--gap)"></i>nivel ≥12</span></span>
+  </h2>
+  <div class="logwrap">
+    <table>
+      <thead><tr><th style="width:90px">Hora</th><th style="width:60px">Nivel</th><th style="width:70px">Regla</th><th style="width:210px">MITRE</th><th>Descripción</th><th style="width:130px">Origen</th></tr></thead>
+      <tbody id="logBody"><tr><td colspan="6" class="empty-log">Esperando la primera alerta…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+(() => {
+  const EXPECTED = [
+    ['T1595','Active Scanning'],
+    ['T1046','Network Service Discovery'],
+    ['T1110','Brute Force'],
+    ['T1078','Valid Accounts'],
+    ['T1021','Remote Services'],
+    ['T1548','Abuse Elevation Control'],
+    ['T1136','Create Account'],
+  ];
+  const LOG_MAX = 100;
+  const $ = id => document.getElementById(id);
+
+  // ---- estado
+  let resetAt = Number(localStorage.getItem('ptl.resetAt') || 0);
+  const counts = new Map();      // técnica -> nº alertas
+  const names  = new Map(EXPECTED); // técnica -> nombre
+  let total = 0, maxLvl = 0, seenIds = new Set();
+
+  // ---- reloj
+  const tick = () => $('clock').textContent = new Date().toLocaleTimeString('es-ES',{hour12:false});
+  tick(); setInterval(tick, 1000);
+
+  // ---- grid
+  const grid = $('grid');
+  for (const [id,name] of EXPECTED) {
+    const el = document.createElement('div');
+    el.className = 'tech gap'; el.id = 'tech-'+id;
+    el.innerHTML = `<div class="id">${id}</div><div class="nm">${name}</div><span class="cnt"></span><span class="st">✖ Hueco</span>`;
+    grid.appendChild(el);
+  }
+
+  function baseTechnique(t){ return String(t||'').toUpperCase().split('.')[0]; } // T1110.001 -> T1110
+
+  function updateGrid(techs, flash){
+    for (const raw of techs) {
+      const t = baseTechnique(raw);
+      if (!/^T\d{4}$/.test(t)) continue;
+      counts.set(t, (counts.get(t)||0)+1);
+      const el = $('tech-'+t);
+      if (el) {
+        el.classList.remove('gap'); el.classList.add('closed');
+        el.querySelector('.st').innerHTML = '✔ Cerrado';
+        el.querySelector('.cnt').textContent = counts.get(t)+'×';
+        if (flash) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+      }
+    }
+    renderExtras();
+    renderCoverage();
+  }
+
+  function renderExtras(){
+    const box = $('extras');
+    const extras = [...counts.keys()].filter(t => !names.has(t)).sort();
+    if (!extras.length) { box.innerHTML = '<span class="empty">Ninguna todavía</span>'; $('kExtra').textContent = 0; return; }
+    box.innerHTML = extras.map(t => `<span class="chip">◆ ${t} <small>${counts.get(t)}×</small></span>`).join('');
+    $('kExtra').textContent = extras.length;
+  }
+
+  function renderCoverage(){
+    const closed = EXPECTED.filter(([t]) => counts.has(t)).length;
+    const pct = Math.round(closed / EXPECTED.length * 100);
+    const num = $('cov');
+    num.innerHTML = pct + '<sup>%</sup>';
+    num.style.color = pct === 100 ? 'var(--closed)' : pct >= 50 ? 'var(--detect)' : 'var(--gap)';
+    $('covN').textContent = closed; $('covT').textContent = EXPECTED.length;
+    $('covBar').style.width = pct + '%';
+    $('kClosed').textContent = closed; $('kGap').textContent = EXPECTED.length - closed;
+    $('s4').textContent = closed ? `${closed} técnica(s) cerrada(s): ${EXPECTED.filter(([t])=>counts.has(t)).map(([t])=>t).join(', ')}` : 'Ninguna técnica cerrada aún';
+    $('b4').textContent = pct + '%';
+  }
+
+  // ---- flujo (animación secuencial)
+  const timers = [];
+  function animateFlow(ev){
+    timers.forEach(clearTimeout); timers.length = 0;
+    const nodes = ['n1','n2','n3','n4'], arrows = ['a1','a2','a3'];
+    [...nodes,...arrows].forEach(id => $(id).classList.remove('lit'));
+    const mitre = ev.mitre.length ? ev.mitre.join(', ') : 'sin mapeo MITRE';
+    const inSet = ev.mitre.some(t => names.has(baseTechnique(t)));
+    $('s1').textContent = `${ev.srcip ? ev.srcip+' → ' : ''}${ev.technique[0] || ev.description}`;
+    $('b1').textContent = ev.mitre[0] || '—';
+    $('s2').textContent = `Regla ${ev.rule_id} · nivel ${ev.level} · ${ev.description}`;
+    $('b2').textContent = 'lvl '+ev.level;
+    $('s3').textContent = ev.mitre.length ? `Mapeado a ${mitre} (${ev.tactic.slice(0,2).join(', ')||'táctica n/d'})` : 'Alerta sin técnica MITRE asociada';
+    $('b3').textContent = inSet ? 'en set' : (ev.mitre.length ? 'fuera set' : '—');
+    const step = (id, d) => timers.push(setTimeout(() => $(id).classList.add('lit'), d));
+    step('n1',0); step('a1',220); step('n2',380); step('a2',600); step('n3',760); step('a3',980); step('n4',1140);
+    timers.push(setTimeout(() => [...nodes,...arrows].forEach(id => $(id).classList.remove('lit')), 2800));
+  }
+
+  // ---- log
+  const body = $('logBody');
+  function lvlClass(l){ return l >= 12 ? 'l3' : l >= 10 ? 'l2' : l >= 5 ? 'l1' : 'l0'; }
+  function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function addLog(ev, fresh){
+    if (body.querySelector('.empty-log')) body.innerHTML = '';
+    const tr = document.createElement('tr');
+    if (fresh) tr.className = 'new';
+    const t = ev.ts ? new Date(ev.ts) : new Date(ev.rx*1000);
+    const tags = ev.mitre.length ? ev.mitre.map(m => { const b = baseTechnique(m); return `<span class="tag ${names.has(b)?'closed':'extra'}">${esc(m)}</span>`; }).join('') : '<span class="tag">—</span>';
+    tr.innerHTML = `<td class="ts">${t.toLocaleTimeString('es-ES',{hour12:false})}</td>
+      <td><span class="lvl ${lvlClass(ev.level)}">${ev.level}</span></td>
+      <td>${esc(ev.rule_id)}</td><td>${tags}</td>
+      <td class="desc">${esc(ev.description)}</td>
+      <td>${esc(ev.srcip || ev.user || ev.agent)}</td>`;
+    body.prepend(tr);
+    while (body.children.length > LOG_MAX) body.lastChild.remove();
+  }
+
+  // ---- ingesta
+  function handle(ev){
+    if (ev.replay && ev.rx * 1000 < resetAt) return;   // descartado por "Reiniciar demo"
+    if (ev.id && seenIds.has(ev.id)) return;            // dedupe en reconexión
+    if (ev.id) seenIds.add(ev.id);
+    ev.mitre = Array.isArray(ev.mitre) ? ev.mitre : [];
+    ev.tactic = ev.tactic || []; ev.technique = ev.technique || [];
+    total++; $('total').textContent = total;
+    if (ev.level > maxLvl) { maxLvl = ev.level; $('kMax').textContent = maxLvl; }
+    if (ev.agent) $('agent').textContent = ev.agent;
+    addLog(ev, !ev.replay);
+    updateGrid(ev.mitre, !ev.replay);
+    if (!ev.replay) animateFlow(ev);
+  }
+
+  // ---- SSE
+  let es;
+  function connect(){
+    es = new EventSource('/stream');
+    es.addEventListener('open', () => { $('conn').className = 'dot on'; $('connTxt').textContent = 'en vivo'; });
+    es.addEventListener('error', () => { $('conn').className = 'dot off'; $('connTxt').textContent = 'reconectando…'; });
+    es.addEventListener('alert', e => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } });
+  }
+  connect();
+
+  // ---- reset (solo estado del cliente)
+  $('reset').addEventListener('click', () => {
+    resetAt = Date.now(); localStorage.setItem('ptl.resetAt', String(resetAt));
+    location.reload();
+  });
+
+  renderCoverage();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!-- Purple Team demo: CIERRE DEL HUECO T1136.
+     Wazuh detecta "New user added" (regla 5902, nivel 8) pero no lo mapea a ATT&CK.
+     Esta regla hija hereda la deteccion y le anade la tecnica MITRE T1136 (Create Account),
+     ademas de subir el nivel para respuesta activa. Aplicar EN VIVO durante la demo. -->
+<group name="local,syslog,adduser,">
+  <rule id="100200" level="10">
+    <if_sid>5902</if_sid>
+    <description>Persistencia: cuenta local creada (mapeada a ATT&amp;CK T1136 por Fable 5.1).</description>
+    <mitre>
+      <id>T1136</id>
+    </mitre>
+    <group>account_manipulation,persistence,</group>
+  </rule>
+</group>

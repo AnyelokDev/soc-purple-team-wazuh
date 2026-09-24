@@ -1,0 +1,52 @@
+# Runtime del dashboard
+*.log
+*.pid
+__pycache__/
+*.pyc
+
+# Copias de seguridad
+*.bak
+*.bak-*
+
+# Alertas reales de Wazuh (nunca subir logs del SOC)
+alerts.json
+*.alerts
+
+# Sistema
+.DS_Store
+
+# Secretos y credenciales (nunca al repo)
+*.pem
+*.key
+*.ppk
+id_rsa*
+.env
+.env.*
+*credencial*
+*Credencial*
+*password*
+*secret*
+
+# Evidencia sin censurar y notas internas de OPSEC (tienen IPs reales)
+originales/
+REVISION-OPSEC*
+
+# Compilación LaTeX del informe (el PDF final sí se versiona en docs/)
+report/*.aux
+report/*.bbl
+report/*.bcf
+report/*.blg
+report/*.fdb_latexmk
+report/*.fls
+report/*.glg
+report/*.glo
+report/*.gls
+report/*.ist
+report/*.acn
+report/*.acr
+report/*.alg
+report/*.out
+report/*.run.xml
+report/*.toc
+report/*.synctex.gz
+report/*.pdf

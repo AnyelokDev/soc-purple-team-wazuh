@@ -1,0 +1,99 @@
+================================================================
+  GUION DEMO PURPLE TEAM  ·  Wazuh x Fable 5.1
+  Dashboard: http://TU_IP_EC2:8080
+  Los ataques se corren en la EC2 (o Kali). La regla se aplica en la EC2.
+================================================================
+
+------------------------------------------------
+PASO 0 - ANTES DE EMPEZAR (deja esto abierto)
+------------------------------------------------
+- Navegador con el dashboard: http://TU_IP_EC2:8080
+- Una terminal en la EC2 (donde corre Wazuh)
+- Comprueba que el panel dice "en vivo" arriba a la derecha.
+
+DECIR: "Esto es Wazuh real. Cada alerta que veran sale de
+alertas reales del SOC, en vivo, no es un video."
+
+------------------------------------------------
+PASO 1 - PONER EL TABLERO EN CERO
+------------------------------------------------
+- En el dashboard pulsa el boton "Reiniciar demo".
+- Las 7 casillas MITRE se ponen ROJAS. Cobertura 0%.
+
+DECIR: "Empezamos sin cobertura. Cada ataque que lance el
+equipo ofensivo deberia encender una tecnica."
+
+------------------------------------------------
+PASO 2 - ATAQUES QUE SI DETECTA (6 en verde)
+------------------------------------------------
+Pega en la terminal, uno por uno:
+
+  # Recon / escaneo  -> T1595 + T1046
+  python3 -c "import socket;[socket.create_connection(('127.0.0.1',22),2).recv(64) for _ in range(3)]"
+
+  # Fuerza bruta SSH  -> T1110 + T1021
+  for i in $(seq 1 8); do ssh -o BatchMode=yes -o ConnectTimeout=2 admin@127.0.0.1 true 2>/dev/null; done
+
+  # Login valido  -> T1078
+  ssh ec2-user@127.0.0.1 true
+
+  # Escalada de privilegios  -> T1548
+  sudo -k; sudo id
+
+MOSTRAR: el flujo de 4 nodos iluminandose, el log en vivo,
+y 6 casillas pasando a VERDE. Cobertura sube.
+
+DECIR: "Fable correlaciona cada alerta con ATT&CK en tiempo
+real. Seis tecnicas cubiertas."
+
+------------------------------------------------
+PASO 3 - ENSENAR EL HUECO (T1136 sigue en rojo)
+------------------------------------------------
+Pega:
+
+  sudo useradd demo_attacker
+
+MOSTRAR: en el log aparece "New user added to the system"
+(nivel 8), PERO la casilla T1136 sigue ROJA.
+
+DECIR: "Aqui esta el hueco. Wazuh VE que se creo una cuenta,
+pero no lo mapea a ATT&CK. Un analista no lo veria como
+persistencia. Esto es una brecha de cobertura real."
+
+------------------------------------------------
+PASO 4 - FABLE CIERRA EL HUECO (en vivo)
+------------------------------------------------
+Pega en la terminal de la EC2:
+
+  /home/ec2-user/demo/close_gap_t1136.sh
+
+(espera ~10 seg a que Wazuh reinicie)
+
+DECIR: "Fable propone y aplica una regla que mapea la
+creacion de cuentas a la tecnica T1136. Lo aplicamos en vivo."
+
+------------------------------------------------
+PASO 5 - REPETIR ATAQUE -> CASILLA EN VERDE
+------------------------------------------------
+Pega:
+
+  sudo userdel demo_attacker; sudo useradd demo_attacker2
+
+MOSTRAR: la casilla T1136 pasa a VERDE. Cobertura 100%.
+
+DECIR: "Mismo ataque, ahora detectado y mapeado. El hueco
+quedo cerrado. Detectar y corregir, en minutos, no semanas."
+
+------------------------------------------------
+PASO 6 - LIMPIEZA (despues de la demo)
+------------------------------------------------
+  sudo userdel demo_attacker2
+
+================================================================
+SI ALGO FALLA
+- El panel no carga: en la EC2 corre  /home/ec2-user/demo/run.sh restart
+- Ver logs del panel:                 /home/ec2-user/demo/run.sh logs
+- Una casilla no enciende: repite su ataque (a veces tarda 1-2 seg)
+- Deshacer reglas: restaura los .bak de /var/ossec/etc/rules/ y
+  corre  sudo systemctl restart wazuh-manager
+================================================================

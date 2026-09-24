@@ -1,0 +1,27 @@
+<!-- Purple Team demo: cierra el hueco de escaneo de red (nmap -sS -A) contra sshd.
+     100099 (nivel 1): "Connection closed" sin autenticar (5722 es nivel 0 y no correlaciona).
+     100098 (nivel 1): "banner exchange ... invalid format" (sondas no-SSH de nmap -A).
+     100100 (nivel 8): >=2 eventos recon_base desde la misma IP en 5 min => escaneo. -->
+<group name="local,sshd,recon,">
+  <rule id="100099" level="1">
+    <if_sid>5722</if_sid>
+    <description>sshd: conexion cerrada sin autenticar (evento base para correlacion).</description>
+    <group>recon_base,</group>
+  </rule>
+  <rule id="100098" level="1">
+    <if_sid>5700</if_sid>
+    <match>banner exchange: Connection from</match>
+    <description>sshd: sonda con protocolo invalido en el puerto SSH (evento base para correlacion).</description>
+    <group>recon_base,</group>
+  </rule>
+  <rule id="100100" level="8" frequency="2" timeframe="300">
+    <if_matched_group>recon_base</if_matched_group>
+    <same_srcip />
+    <description>Recon: posible escaneo de red/servicios contra SSH desde $(srcip) (nmap -sS -A).</description>
+    <mitre>
+      <id>T1046</id>
+      <id>T1595</id>
+    </mitre>
+    <group>recon,network_scan,</group>
+  </rule>
+</group>

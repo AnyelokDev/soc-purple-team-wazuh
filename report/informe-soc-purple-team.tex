@@ -1,0 +1,689 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Informe del proyecto soc-purple-team-wazuh
+%% Hecho con la plantilla personal mapc-proyecto.cls
+%% Compilar: pdflatex -> biber -> makeglossaries -> pdflatex x2
+%% Las capturas se leen de ../evidencia/ (la carpeta del repo).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass{mapc-proyecto}
+\graphicspath{{../evidencia/}}
+% \evidenciaH: igual que \evidencia, pero fija la captura en su sitio
+\newcommand{\evidenciaH}[4][0.92\textwidth]{%
+  \begin{figure}[H]\centering
+  {\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.6pt}%
+   \color{mapclinea}\fbox{\includegraphics[width=#1]{#2}}}%
+  \caption{#3}\label{#4}
+  \end{figure}}
+
+% ---------------------------- METADATOS --------------------------------------
+\proyecto{SOC Purple Team en vivo con Wazuh}
+\subtitulo{Un SOC real en AWS, atacado desde Kali, con un panel que muestra en vivo
+la cobertura de MITRE ATT\&CK sobre alertas reales}
+\tipoproyecto{Proyecto personal \textbullet\ Ciberseguridad defensiva}
+\repositorio{\url{https://github.com/AnyelokDev/soc-purple-team-wazuh}}
+\stack{Wazuh 4.14.7, Amazon EC2 (Amazon Linux 2023), Python 3 (librería estándar),
+HTML/JS, Kali Linux, Fable 5.1 vía Claude Code}
+\contexto{Construido y presentado en el evento Fable 5.1 Build Day (septiembre de 2026)}
+\estadoproyecto{Terminado}
+\versiondoc{1.0}
+\clasificacion{Público \textbullet\ portafolio}
+\cabecera{SOC Purple Team en vivo con Wazuh}
+
+\addbibresource{referencias.bib}
+
+% ------------------------------ SIGLAS ---------------------------------------
+\newacronym{soc}{SOC}{Centro de Operaciones de Seguridad}
+\newacronym{siem}{SIEM}{gestión de información y eventos de seguridad}
+\newacronym{sse}{SSE}{Server-Sent Events}
+\newacronym{ec2}{EC2}{Amazon Elastic Compute Cloud}
+\newacronym{ttp}{TTP}{tácticas, técnicas y procedimientos}
+
+\begin{document}
+\portada
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CAPA 1 — RESUMEN
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{resumen}
+Monté un \gls{soc} pequeño pero real: Wazuh 4.14.7 en una instancia de Amazon
+\gls{ec2}, atacado desde una máquina Kali, y un panel web que lee las alertas de
+Wazuh en vivo y pinta sobre ellas una cuadrícula de MITRE ATT\&CK con un porcentaje
+de cobertura. La idea era mostrar en una demo de pocos minutos el ciclo completo
+de un equipo \emph{purple}: se ataca, se mira qué detecta el SOC, se identifica
+lo que falta y se cierra con una regla nueva.
+
+El set de la demo son siete técnicas. Cinco las cubrieron las reglas de fábrica de
+Wazuh en cuanto hubo actividad. Las otras dos corresponden al \textbf{escaneo de
+red con \texttt{nmap}} (T1595 y T1046). El escaneo funcionó: llegó al servidor,
+identificó los servicios expuestos y dejó sus huellas en el log de SSH. Lo que no
+existía era una regla que interpretara esos eventos, así que para el Wazuh de
+fábrica el escaneo era invisible. Con un decoder y tres reglas de correlación
+nuevas, el escaneo pasó a detectarse y el panel subió del 43\,\% al 71\,\%, hasta
+llegar al \textbf{100\,\% de cobertura con alertas reales}.
+
+\textbf{El aporte principal del proyecto es cómo se escribieron esas reglas.} Yo
+diseñé el flujo, monté el SOC, lancé los ataques y dirigí el trabajo. Dentro de ese
+flujo, Fable 5.1 (vía Claude Code) generó de forma autónoma el decoder y las reglas
+de detección, y las fue mejorando a partir de lo que el Wazuh real registraba hasta
+que el escaneo quedó detectado. También escribió la regla de persistencia (T1136)
+y el panel. Todo se validó contra alertas reales. Durante la demo el panel no
+consulta al modelo; todo lo que muestra sale de \texttt{alerts.json}.
+
+Queda pendiente un modo de anonimización en el panel, para poder grabarlo sin
+que aparezcan IPs ni nombres de host reales.
+\end{resumen}
+
+\seccionsn{Qué demuestra este proyecto}
+
+\begin{table}[!htb]\centering\small
+\begin{tabularx}{\textwidth}{L{4.3cm} Y}
+\toprule
+\filacab \thc{Competencia} & \thc{Dónde se ve} \\
+\midrule
+Desplegar y endurecer un SIEM en la nube & Wazuh todo en uno en EC2, SSH solo con clave (\cref{sec:arq}). \\
+Detección como código con un modelo de IA & Fable 5.1 generó de forma autónoma el decoder \texttt{sshd-banner-invalid} y las reglas 100098--100100 dentro del flujo que diseñé (\cref{sec:reglas}). \\
+Mapeo a MITRE ATT\&CK & Matriz de cobertura de las siete técnicas (\ref{anx:matriz}). \\
+Análisis con evidencia & El caso T1136, donde la evidencia contradijo la hipótesis inicial (\cref{sec:problemas}). \\
+Desarrollo de herramientas propias & Panel en vivo con Python y SSE, sin dependencias (\cref{sec:panel}). \\
+OPSEC al publicar & Capturas censuradas y revisadas; tres fugas que el OCR no vio (\cref{sec:seguridad}). \\
+\bottomrule
+\end{tabularx}
+\caption{Competencias y dónde se respaldan.}\label{tab:competencias}
+\end{table}
+
+\seccionsn{Resultados clave}
+
+\begin{hallazgo}[Resultado 1 --- 100\,\% de cobertura del set con alertas reales]
+Las siete técnicas del set (T1595, T1046, T1110, T1078, T1021, T1548 y T1136)
+quedaron cubiertas por alertas reales de Wazuh.\\[3pt]
+\textbf{Evidencia:} capturas 14, 18 y 22 (\ref{anx:evidencia}).
+\end{hallazgo}
+
+\begin{hallazgo}[Resultado 2 --- el escaneo pasó de invisible para Wazuh a detectado]
+El escaneo con \texttt{nmap} se completó contra el servidor (captura 05), pero el
+Wazuh de fábrica no tenía una regla que interpretara esos eventos, así que no
+generaba alerta. Con el decoder y la regla de correlación 100100, escritos por
+Fable, el mismo escaneo produce una alerta de nivel 8 mapeada a T1046 y T1595, y
+la cobertura del panel sube del 43\,\% al 71\,\%.\\[3pt]
+\textbf{Evidencia:} capturas 05 a 08.
+\end{hallazgo}
+
+\begin{hallazgo}[Resultado 3 --- publicación sin datos reales]
+El repositorio no contiene IPs, nombres de host ni credenciales reales. Las
+capturas usan direcciones de documentación (RFC 5737), y en la revisión final
+aparecieron tres fugas que la verificación con OCR había pasado por alto.\\[3pt]
+\textbf{Evidencia:} \cref{sec:seguridad}.
+\end{hallazgo}
+
+\newpage
+\tableofcontents
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CAPA 2 — TÉCNICA
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Contexto y objetivo}
+
+El proyecto nació para el \emph{Fable 5.1 Build Day}, un evento en el que había
+que construir algo con el modelo Fable 5.1 y presentarlo en vivo. Elegí un tema
+de mi área: automatizar parte del trabajo de un analista de \gls{soc}, que es
+revisar qué técnicas de ataque detecta el \gls{siem}, cuáles no, y escribir las
+reglas que faltan.
+
+El objetivo concreto fue una demo en la que el público viera:
+
+\begin{enumerate}
+  \item Ataques reales contra un servidor real, no un video ni datos simulados.
+  \item Cada alerta de Wazuh apareciendo en pantalla en el momento en que ocurre,
+        con su técnica de MITRE ATT\&CK \parencite{mitre-attack}.
+  \item Un porcentaje de cobertura sobre un set cerrado de técnicas, que sube a
+        medida que se detectan.
+  \item Un hueco de detección y su cierre con una regla escrita para el caso.
+\end{enumerate}
+
+\subsection{Reparto del trabajo}
+
+Como el proyecto se hizo con un modelo de IA, dejo claro qué hizo cada parte:
+
+\begin{table}[!htb]\centering\small
+\begin{tabularx}{\textwidth}{L{3.4cm} Y}
+\toprule
+\filacab \thc{Quién} & \thc{Qué hizo} \\
+\midrule
+Yo & Montaje de la infraestructura (EC2, Wazuh, endurecimiento de SSH), definición del set de técnicas y de la demo, dirección y validación del trabajo del modelo, ejecución de los ataques, revisión OPSEC y presentación. \\
+Fable 5.1 (vía Claude Code) & Escribió el panel (\texttt{server.py} e \texttt{index.html}), el decoder y las reglas de escaneo, y la regla 100200, que detecta la creación de cuentas locales, la mapea a T1136 (persistencia) y la eleva a nivel 10. \\
+\bottomrule
+\end{tabularx}
+\caption{Reparto del trabajo.}\label{tab:reparto}
+\end{table}
+
+\section{Arquitectura}\label{sec:arq}
+
+Todo el lado defensivo vive en una sola instancia \gls{ec2}. Wazuh corre en modo
+todo en uno (manager, indexer y dashboard) y vigila el propio servidor: los
+eventos de SSH, PAM y del sistema del host son la telemetría. El panel en vivo
+corre en la misma máquina y solo lee el archivo de alertas del manager.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.7cm, font=\sffamily\small]
+  \node[nodooscuro, minimum width=2.3cm] (kali) {Kali Linux\\[-1pt]{\scriptsize\mdseries atacante}};
+  \node[nodo, right=1.2cm of kali, minimum width=2.6cm] (host) {Sistema del host\\[-1pt]{\scriptsize sshd, PAM, sudo}};
+  \node[nodo, right=of host, minimum width=2.8cm] (wazuh) {Wazuh manager\\[-1pt]{\scriptsize decoders + reglas}};
+  \node[nodo, below=of wazuh, minimum width=2.8cm] (json) {\texttt{alerts.json}};
+  \node[nodoacento, left=of json, minimum width=2.6cm] (srv) {\texttt{server.py}\\[-1pt]{\scriptsize tail -F + SSE}};
+  \node[nodooscuro, below=0.9cm of kali, minimum width=2.3cm] (nav) {Navegador\\[-1pt]{\scriptsize\mdseries index.html}};
+  \begin{scope}[on background layer]
+    \node[zona, fit=(host)(wazuh)(json)(srv), label={[font=\sffamily\scriptsize\bfseries,text=mapcmorado]above:EC2 \textbullet\ Amazon Linux 2023}] {};
+  \end{scope}
+  \draw[flecha] (kali) -- node[etiq,above] {ataques} (host);
+  \draw[flecha] (host) -- node[etiq,above] {logs} (wazuh);
+  \draw[flecha] (wazuh) -- node[etiq,right] {alerta} (json);
+  \draw[flecha] (json) -- (srv);
+  \draw[flechaacento] (srv) -- node[etiq,above] {SSE :8080} (nav);
+\end{tikzpicture}
+\caption{Arquitectura del laboratorio.}\label{fig:arq}
+\end{figure}
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\textwidth}{L{3.3cm} Y}
+\toprule
+\filacab \thc{Componente} & \thc{Detalle} \\
+\midrule
+Servidor & EC2 \texttt{t3.large} con Amazon Linux 2023 e IP fija (Elastic IP). SSH solo con clave; usuario \texttt{ec2-user}. \\
+SIEM & Wazuh 4.14.7 todo en uno, instalado con el asistente oficial \parencite{wazuh-quickstart}. \\
+Panel & \texttt{dashboard/server.py} (Python, solo librería estándar) e \texttt{index.html}. Escucha en el puerto 8080. \\
+Reglas propias & \texttt{wazuh-rules/}: un decoder, tres reglas de escaneo y la regla 100200. \\
+Atacante & Kali Linux en VirtualBox. El escaneo y los intentos de acceso salen de ahí; la creación de cuentas se hizo en la propia EC2. \\
+\bottomrule
+\end{tabularx}
+\caption{Componentes.}\label{tab:componentes}
+\end{table}
+
+\section{Implementación}
+
+\subsection{Reglas y decoder propios}\label{sec:reglas}
+
+Wazuh ya trae reglas para casi todo el set. Lo que faltaba era una forma de
+detectar el escaneo de red, que sí llegaba al servidor.
+El problema tenía dos partes (\cref{sec:problemas}): la regla de fábrica para
+<<conexión cerrada>> tiene nivel 0, así que no genera alerta, y las sondas no-SSH
+de \texttt{nmap -A} quedan en el log de OpenSSH 9.x como
+\texttt{banner exchange: \ldots\ invalid format}, un mensaje que ningún decoder de
+fábrica interpreta, así que tampoco se extrae la IP de origen.
+
+La solución tiene tres piezas, siguiendo la sintaxis de reglas de Wazuh
+\parencite{wazuh-rules}:
+
+\begin{table}[!htb]\centering\small
+\begin{tabularx}{\textwidth}{C{1.6cm} C{1.1cm} Y L{2.4cm}}
+\toprule
+\filacab \thc{ID} & \thc{Nivel} & \thc{Qué hace} & \thc{MITRE} \\
+\midrule
+decoder & --- & \texttt{sshd-banner-invalid}: extrae \texttt{srcip} y \texttt{srcport} del mensaje \texttt{banner exchange}. & --- \\
+100099 & 1 & Hija de la 5722 (<<conexión cerrada>>). La sube a nivel 1 para que cuente como evento base. & --- \\
+100098 & 1 & Sonda con protocolo inválido en el puerto SSH. Evento base. & --- \\
+100100 & 8 & Dos o más eventos base desde la misma IP en 5 minutos: escaneo. & \chip{T1046} \chip{T1595} \\
+100200 & 10 & Hija de la 5902 (<<cuenta creada>>): detecta la creación de cuentas locales como persistencia, la mapea a T1136 y la sube de nivel 8 a 10. & \chip{T1136} \\
+\bottomrule
+\end{tabularx}
+\caption{Decoder y reglas propias.}\label{tab:reglas}
+\end{table}
+
+Las otras técnicas las cubre Wazuh de fábrica \parencite{wazuh-sshd-rules}:
+5710 y 5712 (usuario inexistente y fuerza bruta; T1110 y T1021), 5715 y 5501
+(acceso válido; T1078 y T1021), 5402 (\texttt{sudo} a root; T1548.003) y 5902
+(cuenta creada; T1136, persistencia).
+
+\subsection{Panel en vivo}\label{sec:panel}
+
+\texttt{server.py} lanza un \texttt{tail -F} sobre
+\texttt{/var/ossec/logs/alerts/alerts.json}, convierte cada línea en un objeto
+reducido (regla, nivel, técnicas, IP de origen, usuario) y lo envía a los
+navegadores conectados por \gls{sse} \parencite{whatwg-sse}. Además:
+
+\begin{itemize}
+  \item Guarda las últimas 300 alertas y las reenvía cuando un navegador se
+        conecta, para que el panel no arranque vacío si se recarga.
+  \item Manda un latido cada 15 segundos y le indica al navegador que se reconecte
+        a los 2 segundos si se cae la conexión.
+  \item Expone \texttt{/health} y \texttt{/api/recent} para comprobar el estado
+        sin abrir el panel.
+\end{itemize}
+
+\texttt{index.html} mantiene el estado de la demo: el flujo de cuatro etapas, la
+cuadrícula de las siete técnicas y el porcentaje. Una casilla pasa a
+<<cerrado>> cuando llega una alerta real mapeada a esa técnica. El botón
+<<Reiniciar demo>> pone todo a cero y guarda ese punto en el navegador.
+
+\begin{nota}[Sobre la etapa <<Fable 5.1>> del panel]
+El flujo del panel muestra cuatro etapas: Kali, Wazuh, Fable 5.1 y Regla. La
+tercera es solo visual: repite el mapeo MITRE que ya trae la alerta de Wazuh. El
+panel no llama a ningún modelo en tiempo real. Fable participó en la
+construcción, no en la ejecución.
+\end{nota}
+
+\subsection{Scripts de apoyo}
+
+\begin{itemize}
+  \item \texttt{dashboard/run.sh}: arranca, detiene y revisa el panel
+        (\texttt{start}, \texttt{stop}, \texttt{restart}, \texttt{status},
+        \texttt{logs}).
+  \item \texttt{scripts/close\_gap\_t1136.sh}: hace copia de seguridad de las
+        reglas, añade la 100200 si no está y reinicia el manager.
+  \item \texttt{scripts/enable\_active\_response.sh}: activa el bloqueo automático
+        (\texttt{firewall-drop}) para alertas de nivel 10 o más
+        \parencite{wazuh-ar}. Trae marcadores para poner las IPs de gestión en
+        la lista blanca antes de ejecutarlo.
+\end{itemize}
+
+\section{La demo paso a paso}\label{sec:demo}
+
+La demo empieza con el panel en cero y avanza por fases. La
+\cref{tab:progresion} resume cómo subió la cobertura según las capturas.
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\textwidth}{L{3.4cm} C{1.9cm} C{1.6cm} Y}
+\toprule
+\filacab \thc{Fase} & \thc{Capturas} & \thc{Cobertura} & \thc{Técnicas nuevas y regla} \\
+\midrule
+Acceso válido y \texttt{sudo} & 02--04 & 43\,\% & T1078, T1021 (5715, 5501) y T1548, escalada de privilegios (5402) \\
+Escaneo desde Kali & 05--08 & 71\,\% & T1595 y T1046 (100100, propia) \\
+Intentos de acceso desde Kali & 09--13 & 86\,\% & T1110 (5710 y 5712) \\
+Creación de cuenta en la EC2 & 14--18 & 100\,\% & T1136, persistencia (5902, de fábrica) \\
+Regla 100200 aplicada & 20--22 & 100\,\% & T1136 detectada por la 100200 con nivel 10 \\
+\bottomrule
+\end{tabularx}
+\caption{Progresión de la cobertura durante la demo.}\label{tab:progresion}
+\end{table}
+
+\evidenciaH[0.85\textwidth]{06_panel_71_escaneo_detectado.png}{El escaneo de Kali detectado por la
+regla 100100: T1595 y T1046 pasan a <<cerrado>> y la cobertura sube al 71\,\%.}{fig:esc}
+
+Los intentos de acceso por contraseña con una herramienta de fuerza bruta no
+llegaron a probarse: el servidor rechaza la autenticación por contraseña. Por eso
+esa fase se hizo con intentos de acceso de usuarios inexistentes, que Wazuh
+registra con la regla 5710 y, al repetirse, con la 5712
+(\cref{sec:problemas}).
+
+La última fase corresponde a la persistencia mediante creación de cuentas
+(T1136). La secuencia fue:
+
+\begin{enumerate}
+  \item Ejecuté \texttt{sudo useradd} en la EC2 para generar el evento de
+        creación de cuenta (capturas 15 y 16).
+  \item Apliqué la regla 100200, escrita por Fable, con
+        \texttt{close\_gap\_t1136.sh} (captura 21).
+  \item Al crear de nuevo una cuenta, la regla 100200 detectó el evento, lo
+        mapeó a T1136 y lo elevó a nivel 10. En el log del panel aparece así:
+        <<Persistencia: cuenta local creada (mapeada a ATT\&CK T1136 por
+        Fable 5.1)>> (captura 22).
+\end{enumerate}
+
+El cierre del hueco consiste en eso: la creación de cuentas queda detectada y
+etiquetada como la técnica de persistencia que es, con un nivel que la hace
+visible frente al resto de eventos del sistema.
+
+\evidenciaH[0.85\textwidth]{22_panel_100_regla_100200_t1136.png}{Panel al 100\,\% con la regla 100200
+activa: la creación de \texttt{demo\_attacker2} entra como nivel 10, mapeada a T1136
+(persistencia).}{fig:final}
+
+\section{Decisiones de diseño}
+
+\begin{decision}[Decisión 1 --- Python sin dependencias y SSE para el panel]
+\contextodecision{El panel tenía que mostrar alertas en el momento en que ocurren
+y arrancar en la misma EC2 sin instalar nada.}
+\eleccion{Un servidor con solo la librería estándar de Python y \gls{sse} hacia el
+navegador.}
+\porque{El flujo va en un solo sentido (servidor a navegador), y SSE resuelve eso
+sobre HTTP normal, con reconexión automática del navegador. Sin dependencias, el
+panel se copia y se ejecuta en cualquier servidor con Python 3.}
+\descartado{WebSockets (bidireccional, no hacía falta) y consultar la API del
+indexer cada pocos segundos (añade retraso y credenciales).}
+\end{decision}
+
+\begin{decision}[Decisión 2 --- leer \texttt{alerts.json} con \texttt{sudo -n tail -F}]
+\contextodecision{El archivo de alertas es de Wazuh y el panel no debía correr como
+root.}
+\eleccion{Lanzar \texttt{tail -F} con \texttt{sudo -n} desde un usuario normal.}
+\porque{\texttt{tail -F} sigue al archivo aunque Wazuh lo rote cada día, y
+\texttt{sudo -n} falla de inmediato en vez de quedarse esperando una contraseña.
+Solo ese comando necesita privilegios, no todo el servidor web.}
+\descartado{Ejecutar \texttt{server.py} como root.}
+\end{decision}
+
+\begin{decision}[Decisión 3 --- el manager se vigila a sí mismo]
+\contextodecision{Hacía falta telemetría del servidor atacado.}
+\eleccion{Usar los logs del propio host del manager, sin agente.}
+\porque{El agente y el manager de Wazuh no se instalan en el mismo equipo, y el
+manager ya analiza sus propios logs. Para una demo de un solo servidor era
+suficiente.}
+\descartado{Una segunda instancia con agente, que duplica costo y
+complejidad.}
+\end{decision}
+
+\begin{decision}[Decisión 4 --- correlación en vez de una regla por evento]
+\contextodecision{Un solo evento de conexión cerrada no significa escaneo;
+pasa todo el tiempo.}
+\eleccion{Eventos base de nivel 1 y una regla de correlación (100100) que exige dos
+o más desde la misma IP en 5 minutos.}
+\porque{Así cada conexión suelta no genera ruido, pero un escaneo sí se alerta, y
+con la IP del escáner.}
+\descartado{Alertar cada conexión cerrada, que llenaría el panel de falsos
+positivos.}
+\end{decision}
+
+\begin{decision}[Decisión 5 --- la regla 100200 en un archivo aparte]
+\contextodecision{La demo necesitaba un momento visible de <<regla nueva
+aplicada>>.}
+\eleccion{Dejar la 100200 fuera de \texttt{local\_rules.xml} y aplicarla en vivo con
+\texttt{close\_gap\_t1136.sh}.}
+\porque{Así se puede mostrar el antes y el después sin editar archivos en el
+escenario. El script hace copia de seguridad y no duplica la regla si ya está.}
+\descartado{Editar las reglas a mano durante la presentación.}
+\end{decision}
+
+\section{Problemas encontrados}\label{sec:problemas}
+
+\begin{problema}[Problema 1 --- Wazuh de fábrica no detectaba el escaneo]
+\sintoma{El escaneo desde Kali funcionó: llegó al servidor, encontró los puertos
+22 y 443 abiertos e identificó los servicios (captura 05). Aun así, el panel no
+mostraba ninguna alerta para T1595 ni T1046.}
+\hipotesis{Los eventos del escaneo sí llegaban a Wazuh, pero ninguna regla de
+fábrica los interpretaba como escaneo.}
+\verificacion{La regla de fábrica para conexión cerrada (5722) tiene nivel 0. Las
+sondas no-SSH aparecían en el log como \texttt{banner exchange \ldots\ invalid
+format}, un formato que ningún decoder extraía.}
+\resultado{Fable generó el decoder \texttt{sshd-banner-invalid} y las reglas
+100098, 100099 y 100100, y las ajustó contra los eventos reales del servidor. El
+escaneo, que antes era invisible para Wazuh, ahora produce una alerta de nivel 8
+con T1046 y T1595, y la cobertura sube del 43\,\% al 71\,\% (capturas 06 a 08).}
+\end{problema}
+
+\begin{problema}[Problema 2 --- la fuerza bruta por contraseña no era posible]
+\sintoma{La herramienta de fuerza bruta respondía que el servidor no admite
+autenticación por contraseña (captura 10).}
+\hipotesis{Es el endurecimiento del propio servidor: SSH solo con clave.}
+\verificacion{El mensaje de error lo confirma. Relajar esa configuración para la
+demo no tenía sentido.}
+\resultado{La fase se hizo con intentos de acceso de usuarios inexistentes, que
+Wazuh sí registra (5710) y correlaciona como fuerza bruta (5712, T1110).}
+\end{problema}
+
+\begin{problema}[Problema 3 --- T1136: la hipótesis inicial era incorrecta]
+\sintoma{Antes de crear cualquier cuenta, la casilla T1136 estaba en rojo.}
+\hipotesis{Se asumió que Wazuh detectaba la creación de cuentas (regla 5902) pero no
+la mapeaba a MITRE, y con esa idea se escribió la regla 100200 para
+<<cerrar el hueco>>.}
+\verificacion{En la captura 14, la alerta de la 5902 ya trae la etiqueta T1136 y la
+casilla pasa a verde antes de aplicar la 100200. El código fuente de Wazuh 4.14
+lo confirma: la regla 5902 incluye \texttt{<mitre><id>T1136</id></mitre>}
+\parencite{wazuh-syslog-rules}. La casilla estaba en rojo porque aún no se había
+creado ninguna cuenta, no porque faltara el mapeo.}
+\resultado{La 100200 sigue siendo útil, pero por otra razón: con ella activa, la
+creación de la cuenta queda registrada como <<Persistencia: cuenta local creada
+(mapeada a ATT\&CK T1136 por Fable 5.1)>>, con nivel 10 en vez de 8, lo que la pone
+dentro del umbral de respuesta activa (captura 22). La lección es que un <<hueco>> en la cuadrícula significa
+<<sin alerta todavía>>, y eso hay que comprobarlo contra el ruleset antes de
+escribir una regla.}
+\end{problema}
+
+\begin{problema}[Problema 4 --- fugas en capturas ya censuradas]
+\sintoma{Las capturas se censuraron con un script (bloque opaco y reemplazo por
+direcciones RFC 5737), y una verificación con OCR dio cero coincidencias.}
+\hipotesis{El OCR no ve todo.}
+\verificacion{Revisadas a ojo y con el contraste subido, tres capturas todavía
+mostraban datos reales: una terminal transparente dejaba ver detrás un comando
+anterior con la IP del servidor, y en otras dos la última fila del log, cortada
+en el borde, mostraba parte de una IP y de un nombre de host internos.}
+\resultado{Las copias del repositorio se recortaron y se revisaron de nuevo. La
+lección quedó en el checklist OPSEC de mi plantilla.}
+\end{problema}
+
+\section{Seguridad del propio proyecto}\label{sec:seguridad}
+
+\begin{riesgo}[El panel no tiene autenticación]
+\texttt{server.py} escucha en \texttt{0.0.0.0:8080} y muestra alertas reales,
+incluidas IPs de origen y usuarios. El grupo de seguridad de la EC2 debe permitir
+el puerto 8080 solo desde la IP de quien presenta.
+\end{riesgo}
+
+\begin{riesgo}[El bloqueo automático puede bloquear al administrador]
+\texttt{enable\_active\_response.sh} bloquea por firewall las IPs que disparan
+alertas de nivel 10 o más. Antes de ejecutarlo hay que reemplazar los marcadores
+\texttt{IP\_GESTION\_SSH} e \texttt{IP\_GESTION\_NAVEGADOR}, o se pierde el acceso
+al servidor.
+\end{riesgo}
+
+Para publicar el proyecto:
+
+\begin{itemize}
+  \item En el código y la documentación, la IP del servidor aparece como
+        \texttt{TU\_IP\_EC2}. No hay claves, contraseñas ni IPs de gestión.
+  \item Las capturas usan direcciones de documentación \parencite{rfc5737}:
+        \texttt{198.51.100.20} para el servidor, \texttt{203.0.113.10} para el
+        atacante y \texttt{198.51.100.30} para el origen de las sesiones de
+        administración. El nombre del host aparece como \texttt{wazuh-lab}.
+  \item El \texttt{.gitignore} excluye claves, archivos \texttt{.env},
+        credenciales, logs de alertas y notas internas de OPSEC.
+\end{itemize}
+
+Además, la instancia sigue generando costo apagada (disco EBS e IP pública), así
+que al terminar conviene liberar la IP y terminar la instancia.
+
+\section{Limitaciones y trabajo futuro}
+
+\begin{limitacion}[El modelo no participa en la ejecución]
+La etapa <<Fable 5.1>> del panel es visual. Un siguiente paso real sería que el
+modelo recibiera las alertas sin técnica y propusiera la regla en vivo, con
+aprobación humana antes de aplicarla.
+\end{limitacion}
+
+\begin{limitacion}[Alcance acotado]
+Un solo servidor, siete técnicas y ataques controlados. La cobertura mide
+<<técnica con al menos una alerta real>>, no la calidad de la detección ante
+variantes del mismo ataque. Además, la \texttt{t3.large} (2 vCPU) está por debajo
+de los 4 vCPU que Wazuh recomienda para el modo todo en uno
+\parencite{wazuh-quickstart}. Alcanzó para la demo, pero no sirve como referencia
+de rendimiento.
+\end{limitacion}
+
+\begin{recomendacion}[Modo de anonimización en el panel]
+Añadir en \texttt{server.py}, donde se arma cada alerta, un modo activado con
+\texttt{ANON=1} que reemplace IPs y nombres de host antes de enviarlos por SSE.
+Así se puede grabar o proyectar el panel sin censurar después.
+\end{recomendacion}
+
+\section{Conclusiones}
+
+\begin{enumerate}
+  \item \textbf{Un modelo de IA puede escribir y mejorar reglas de detección de
+        forma autónoma.} Es el aporte principal del proyecto. Dentro del flujo
+        que diseñé (SOC montado, ataques definidos y validación contra alertas
+        reales), Fable 5.1 generó el decoder y las reglas que convirtieron un
+        escaneo invisible para Wazuh en una alerta mapeada a MITRE, y las ajustó
+        hasta que funcionaron sobre los eventos reales. Mi papel fue diseñar el
+        flujo, dirigir y verificar; el de Fable, producir la detección.
+  \item \textbf{El hueco real estaba en la detección del escaneo.} Las reglas de fábrica cubren
+        bien los accesos, la escalada de privilegios con \texttt{sudo} (T1548) y
+        la persistencia por creación de cuentas (T1136), pero no
+        correlacionan un escaneo de red contra OpenSSH 9.x. Ahí fue donde la
+        detección como código aportó.
+  \item \textbf{Un panel vacío no es un hueco.} El caso T1136 mostró que hay que
+        verificar contra el ruleset antes de dar por hecho que algo no se
+        detecta.
+  \item \textbf{La autonomía funciona mejor con un flujo que la verifique.} Que
+        cada regla se probara contra un Wazuh real, y que la evidencia se revisara
+        hasta encontrar el error de la hipótesis sobre T1136, fue lo que hizo
+        confiable el resultado.
+  \item \textbf{Publicar también es parte del proyecto.} La revisión OPSEC encontró
+        fugas después de una verificación automática que decía que no las había.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CAPA 3 — ANEXOS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\iniciaranexos
+
+\section{Matriz de cobertura ATT\&CK}\label{anx:matriz}
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\textwidth}{L{3.1cm} L{2.4cm} Y C{1.6cm} C{1.2cm} C{1.5cm}}
+\toprule
+\filacab \thc{Técnica} & \thc{Táctica} & \thc{Actividad en la demo} & \thc{Regla} & \thc{Captura} & \thc{Estado} \\
+\midrule
+T1595 Active Scanning & Reconocimiento & Escaneo desde Kali & 100100 & 06 & \hecho \\
+T1046 Network Service Discovery & Descubrimiento & Escaneo desde Kali & 100100 & 06 & \hecho \\
+T1110 Brute Force & Acceso a credenciales & Accesos con usuarios inexistentes desde Kali & 5710, 5712 & 12, 13 & \hecho \\
+T1078 Valid Accounts & Acceso inicial & Acceso SSH válido & 5715, 5501 & 03, 04 & \hecho \\
+T1021 Remote Services & Movimiento lateral & Acceso SSH & 5715, 5710 & 03, 12 & \hecho \\
+T1548 Abuse Elevation Control & Escalada de privilegios & \texttt{sudo} a root & 5402 & 04 & \hecho \\
+T1136 Create Account & Persistencia & Creación de cuenta local con \texttt{useradd} en la EC2 & 5902, 100200 & 14, 22 & \hecho \\
+\bottomrule
+\end{tabularx}
+\caption{Cobertura de las siete técnicas del set. La táctica es la principal en el
+contexto de la demo; T1078 figura en ATT\&CK bajo varias tácticas.}\label{tab:matriz}
+\end{table}
+
+\section{Reglas y decoder}\label{anx:reglas}
+
+\textbf{Decoder} (\texttt{wazuh-rules/local\_decoder.xml}):
+
+\begin{lstlisting}[language=XML]
+<decoder name="sshd-banner-invalid">
+  <parent>sshd</parent>
+  <prematch>banner exchange: Connection from </prematch>
+  <regex offset="after_prematch">^(\S+) port (\d+):</regex>
+  <order>srcip, srcport</order>
+</decoder>
+\end{lstlisting}
+
+\textbf{Reglas de escaneo} (\texttt{wazuh-rules/local\_rules.xml}):
+
+\begin{lstlisting}[language=XML]
+<rule id="100099" level="1">
+  <if_sid>5722</if_sid>
+  <description>sshd: conexion cerrada sin autenticar (evento base).</description>
+  <group>recon_base,</group>
+</rule>
+<rule id="100098" level="1">
+  <if_sid>5700</if_sid>
+  <match>banner exchange: Connection from</match>
+  <description>sshd: sonda con protocolo invalido (evento base).</description>
+  <group>recon_base,</group>
+</rule>
+<rule id="100100" level="8" frequency="2" timeframe="300">
+  <if_matched_group>recon_base</if_matched_group>
+  <same_srcip />
+  <description>Recon: posible escaneo contra SSH desde $(srcip).</description>
+  <mitre><id>T1046</id><id>T1595</id></mitre>
+  <group>recon,network_scan,</group>
+</rule>
+\end{lstlisting}
+
+\textbf{Regla de creación de cuentas} (\texttt{wazuh-rules/local\_rules\_t1136.xml}):
+
+\begin{lstlisting}[language=XML]
+<rule id="100200" level="10">
+  <if_sid>5902</if_sid>
+  <description>Persistencia: cuenta local creada (mapeada a ATT&amp;CK T1136 por Fable 5.1).</description>
+  <mitre><id>T1136</id></mitre>
+  <group>account_manipulation,persistence,</group>
+</rule>
+\end{lstlisting}
+
+Las descripciones están abreviadas; el texto completo está en los archivos del
+repositorio.
+
+\section{Montaje desde cero}\label{anx:montaje}
+
+\textbf{1. Instancia.} EC2 con Amazon Linux 2023 e IP fija. En el grupo de
+seguridad, abrir 22 y 443 solo desde tu IP, y 8080 solo desde la IP del navegador
+del panel.
+
+\textbf{2. Wazuh todo en uno} \parencite{wazuh-quickstart}:
+
+\begin{lstlisting}[style=terminal]
+curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh
+sudo bash ./wazuh-install.sh -a
+\end{lstlisting}
+
+\textbf{3. Reglas y decoder propios:}
+
+\begin{lstlisting}[style=terminal]
+sudo cp wazuh-rules/local_rules.xml   /var/ossec/etc/rules/local_rules.xml
+sudo cp wazuh-rules/local_decoder.xml /var/ossec/etc/decoders/local_decoder.xml
+sudo chown wazuh:wazuh /var/ossec/etc/rules/local_rules.xml \
+                       /var/ossec/etc/decoders/local_decoder.xml
+sudo systemctl restart wazuh-manager
+\end{lstlisting}
+
+\textbf{4. Panel.} El usuario que lo arranca debe poder ejecutar
+\texttt{sudo -n tail} sobre \texttt{alerts.json}.
+
+\begin{lstlisting}[style=terminal]
+cd dashboard
+./run.sh start     # http://TU_IP_EC2:8080
+./run.sh status    # consulta /health
+\end{lstlisting}
+
+\textbf{5. Regla 100200 (opcional, en vivo):}
+\texttt{./scripts/close\_gap\_t1136.sh}.
+
+\section{Evidencia}\label{anx:evidencia}
+
+Las 22 capturas están en \texttt{evidencia/}, numeradas en el orden en que
+ocurrieron. Aquí van las que sostienen los resultados, en el orden de la demo;
+todas usan direcciones de documentación.
+
+\Needspace{22\baselineskip}\textbf{Punto de partida (43\,\%).} El panel ya muestra cerradas T1078, T1021 y
+T1548. Las produjeron un acceso SSH válido y un \texttt{sudo} a root, y las
+detectaron reglas de fábrica (5715, 5501 y 5402). Es la base que Wazuh cubre solo,
+antes de cualquier regla nueva.
+
+\evidenciaH{03_panel_43_con_log.png}{Captura 03. Primeras técnicas cerradas (43\,\%)
+con accesos válidos y \texttt{sudo}.}{fig:ev03}
+
+\Needspace{22\baselineskip}\textbf{El escaneo llega al servidor.} Desde Kali se lanzó \texttt{nmap} contra la
+EC2: encontró los puertos 22 y 443 abiertos e identificó OpenSSH 9.9 y el servicio
+web de Wazuh. El ataque funcionó; lo que faltaba era que Wazuh lo detectara, y eso
+es lo que resuelven las reglas de Fable (Resultado 2).
+
+\evidenciaH[0.8\textwidth]{05_kali_nmap_escaneo.png}{Captura 05. Escaneo desde Kali
+contra el servidor (huellas SSH tapadas).}{fig:ev05}
+
+\Needspace{22\baselineskip}\textbf{El endurecimiento hace su trabajo.} El intento de fuerza bruta por contraseña
+termina con el servidor respondiendo que no admite ese método de autenticación. Por
+eso la fase de fuerza bruta se hizo con usuarios inexistentes (Problema 2).
+
+\evidenciaH[0.8\textwidth]{10_kali_hydra_rechazado_ssh_solo_clave.png}{Captura 10.
+El servidor rechaza la autenticación por contraseña.}{fig:ev10}
+
+\Needspace{22\baselineskip}\textbf{Fuerza bruta detectada (86\,\%).} Los intentos de acceso con usuarios
+inexistentes desde Kali aparecen en el log como regla 5710, mapeados a T1110 y
+T1021, y T1110 pasa a cerrada. Para entonces el escaneo ya figura como detectado
+por la regla 100100.
+
+\evidenciaH{12_panel_86_fuerza_bruta_detectada.png}{Captura 12. Intentos con
+usuarios inexistentes detectados por la 5710 (86\,\%).}{fig:ev12}
+
+\Needspace{22\baselineskip}\textbf{Persistencia por creación de cuenta (100\,\%).} El \texttt{sudo useradd}
+ejecutado en la EC2 genera la alerta 5902 con T1136, y el panel llega al 100\,\%.
+Esta captura es la evidencia del Problema 3: la regla de fábrica ya etiquetaba
+T1136 antes de aplicar la 100200.
+
+\evidenciaH{14_panel_100_cuenta_creada_regla_5902.png}{Captura 14. La regla de fábrica
+5902 ya trae T1136: la casilla se cierra antes de aplicar la 100200.}{fig:ev14}
+
+\Needspace{22\baselineskip}\textbf{Despliegue de la regla de Fable.} En la EC2 se ejecuta
+\texttt{close\_gap\_t1136.sh}, que agrega la regla 100200 y reinicia el manager. A
+partir de aquí, cada cuenta nueva se registra como <<Persistencia: cuenta local
+creada (mapeada a ATT\&CK T1136 por Fable 5.1)>> con nivel 10, como se ve en la
+captura 22 (\cref{fig:final}).
+
+\evidenciaH[0.75\textwidth]{21_ec2_close_gap_t1136.png}{Captura 21. Aplicación de la
+regla 100200 con \texttt{close\_gap\_t1136.sh}.}{fig:ev21}
+
+\clearpage
+\printglossary[type=\acronymtype,title={Glosario de siglas},toctitle={Glosario de siglas}]
+\printbibliography[title={Referencias},heading=bibintoc]
+\end{document}

@@ -1,0 +1,8 @@
+<!-- Purple Team demo: OpenSSH 9.x registra las sondas no-SSH de nmap -A como
+     "banner exchange: Connection from <ip> port <n>: invalid format". Extraemos srcip/srcport. -->
+<decoder name="sshd-banner-invalid">
+  <parent>sshd</parent>
+  <prematch>banner exchange: Connection from </prematch>
+  <regex offset="after_prematch">^(\S+) port (\d+):</regex>
+  <order>srcip, srcport</order>
+</decoder>
