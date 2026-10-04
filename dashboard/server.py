@@ -180,6 +180,9 @@ class Handler(BaseHTTPRequestHandler):
                 except queue.Empty:
                     self.wfile.write(b": ping\n\n")
                 self.wfile.flush()
+                if q not in clients:  # broadcast lo descarto (cola llena): cerrar para que el navegador reconecte
+                    log(f"SSE descartado por cola llena {self.address_string()}")
+                    break
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
         except Exception as e:

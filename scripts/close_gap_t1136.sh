@@ -5,4 +5,4 @@ sudo grep -q 'id="100200"' /var/ossec/etc/rules/local_rules.xml || sudo tee -a /
 sudo chown wazuh:wazuh /var/ossec/etc/rules/local_rules.xml
 sudo systemctl restart wazuh-manager; sleep 10
 sudo /var/ossec/bin/wazuh-control status | grep analysisd
-echo "Hueco T1136 cerrado. Repite 'sudo useradd ...' y la casilla pasa a verde."
+echo "Regla 100200 aplicada. Repite 'sudo useradd ...' y la alerta entrara con nivel 10."

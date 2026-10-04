@@ -119,11 +119,11 @@ e `IP_GESTION_NAVEGADOR` por tus IPs públicas de gestión, o perderás el acces
 
 | Archivo | ID regla | Nivel | Técnica MITRE | Qué hace |
 |---|---|---|---|---|
-| `local_rules.xml` / `local_rules_scan.xml` | 100099 | 1 | — (base) | Conexión SSH cerrada sin autenticar. Evento base para correlación. |
-| `local_rules.xml` / `local_rules_scan.xml` | 100098 | 1 | — (base) | Sonda con protocolo inválido en el puerto SSH (nmap `-A`). Evento base. |
-| `local_rules.xml` / `local_rules_scan.xml` | 100100 | 8 | **T1046** (Network Service Discovery), **T1595** (Active Scanning) | **Cierre del hueco real.** ≥2 eventos base desde la misma IP en 5 min ⇒ escaneo de red/servicios. Sin ella, el Wazuh de fábrica no alerta del escaneo. |
+| `local_rules.xml` | 100099 | 1 | — (base) | Conexión SSH cerrada sin autenticar. Evento base para correlación. |
+| `local_rules.xml` | 100098 | 1 | — (base) | Sonda con protocolo inválido en el puerto SSH (nmap `-A`). Evento base. |
+| `local_rules.xml` | 100100 | 8 | **T1046** (Network Service Discovery), **T1595** (Active Scanning) | **Cierre del hueco real.** ≥2 eventos base desde la misma IP en 5 min ⇒ escaneo de red/servicios. Sin ella, el Wazuh de fábrica no alerta del escaneo. |
 | `local_rules_t1136.xml` | 100200 | 10 | **T1136** (Create Account) | **Enriquecimiento.** Hereda de la regla de fábrica 5902 ("New user added"), que ya detecta la creación de cuentas y la mapea a T1136. Sube el nivel de 8 a 10 y añade la descripción de persistencia. Se aplica en vivo. |
-| `local_decoder.xml` / `local_decoder_scan.xml` | decoder `sshd-banner-invalid` | — | — | Extrae `srcip`/`srcport` de las sondas no-SSH de nmap que OpenSSH 9.x registra como "banner exchange … invalid format". |
+| `local_decoder.xml` | decoder `sshd-banner-invalid` | — | — | Extrae `srcip`/`srcport` de las sondas no-SSH de nmap que OpenSSH 9.x registra como "banner exchange … invalid format". |
 
 Las técnicas T1110, T1078, T1021 y T1548 las cubre Wazuh con sus reglas de fábrica
 (fuerza bruta SSH, login válido, servicios remotos y escalada con sudo); no requieren
