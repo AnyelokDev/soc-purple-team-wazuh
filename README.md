@@ -201,6 +201,12 @@ sudo userdel demo_attacker2
 
 El guion completo, con lo que decir en cada paso, está en `docs/GUION_DEMO.txt`.
 
+## Proyecto relacionado
+
+[**soc-tutor**](https://github.com/AnyelokDev/soc-tutor) — el otro lado del mismo problema: aquí
+se *detecta* el ataque con reglas custom; allí se lee el `auth.log` resultante y se *explica*
+como lo haría un analista senior a uno junior, con línea de tiempo, técnicas MITRE y playbook.
+
 ## Licencia
 
 Distribuido bajo licencia MIT. Ver [`LICENSE`](LICENSE).
